@@ -1,0 +1,314 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping List App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .place-group {
+            margin-bottom: 20px;
+        }
+        .place-title {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+        .item {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            border: 1px solid black;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .needed {
+            background-color: green;
+            color: white;
+        }
+        .once-off-box {
+            display: block;
+            margin: 10px 0;
+            padding: 5px;
+            border: 1px dashed black;
+            width: 300px;
+        }
+
+    /* Style for green background when text is entered */
+    .has-text {
+        background-color: green;
+		color: white;
+    }
+	
+    .json-display {
+        display: none; /* Hidden by default */
+        width: 100%;
+        height: 200px;
+        margin-top: 20px;
+        font-family: monospace;
+        white-space: pre;
+        border: 1px solid #ddd;
+        padding: 10px;
+    }	
+	
+    </style>
+</head>
+<body>
+    <h1>Shopping List</h1>
+    <div id="shoppingList"></div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const API_URL = 'https://api.npoint.io/8471b4273188ecd7e8c5';
+        let currentData = null;
+
+        // Create the Edit Mode container, toggle, and label outside of displayShoppingList
+        const editModeContainer = document.createElement('div');
+        editModeContainer.style.display = 'none'; // Hidden until data loads
+        editModeContainer.style.marginTop = '20px';
+        editModeContainer.style.alignItems = 'center';
+        editModeContainer.style.display = 'flex';
+
+        const editModeToggle = document.createElement('input');
+        editModeToggle.type = 'checkbox';
+		
+		editModeToggle.style.display = 'none'; // Hidden until data loads
+        editModeToggle.id = 'editMode';
+
+        const editModeLabel = document.createElement('label');
+        editModeLabel.htmlFor = 'editMode';
+        editModeLabel.textContent = '';
+
+        editModeContainer.appendChild(editModeToggle);
+        editModeContainer.appendChild(editModeLabel);
+		
+
+        // Append the edit mode container below the shopping list only once
+        document.body.appendChild(editModeContainer);
+
+        // Add an event listener for the toggle to refresh display
+        editModeToggle.addEventListener('change', displayShoppingList);
+
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) return null;
+                const data = await response.json();
+                currentData = data;
+                return data;
+            } catch (error) {
+                console.error('Network or fetch error:', error);
+                return null;
+            }
+        }
+
+        async function updateData(newData) {
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newData),
+                });
+            } catch (error) {
+                console.error('Network or fetch error:', error);
+            }
+        }
+
+        async function displayShoppingList() {
+            const data = await fetchData();
+            if (!data || !data.places) return;
+
+            const shoppingList = document.getElementById('shoppingList');
+            shoppingList.innerHTML = '';
+
+            data.places.forEach((place, placeIndex) => {
+                const placeGroup = document.createElement('div');
+                placeGroup.classList.add('place-group');
+
+                const placeTitle = document.createElement('div');
+                placeTitle.classList.add('place-title');
+                placeTitle.textContent = place.name;
+
+                if (editModeToggle.checked) {
+                    const placeDeleteButton = document.createElement('span');
+                    placeDeleteButton.textContent = 'X';
+                    placeDeleteButton.style.color = 'red';
+                    placeDeleteButton.style.marginLeft = '10px';
+                    placeDeleteButton.style.cursor = 'pointer';
+                    placeDeleteButton.onclick = () => {
+                        if (confirm(`Are you sure you want to delete "${place.name}" and all its items?`)) {
+                            data.places.splice(placeIndex, 1);
+                            updateData(data).then(() => {
+                                displayShoppingList(); // Refresh display after update
+                            });
+                        }
+                    };
+                    placeTitle.appendChild(placeDeleteButton);
+                }
+
+                placeGroup.appendChild(placeTitle);
+
+                place.items.forEach((item, itemIndex) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.classList.add('item');
+                    if (item.needed) itemDiv.classList.add('needed');
+                    itemDiv.textContent = item.name;
+
+                    itemDiv.onclick = () => {
+                        item.needed = !item.needed;
+                        itemDiv.classList.toggle('needed', item.needed);
+                        updateData(data);
+                    };
+
+                    if (editModeToggle.checked) {
+                        const itemDeleteButton = document.createElement('span');
+                        itemDeleteButton.textContent = 'X';
+                        itemDeleteButton.style.color = 'red';
+                        itemDeleteButton.style.marginLeft = '10px';
+                        itemDeleteButton.style.cursor = 'pointer';
+                        itemDeleteButton.onclick = (event) => {
+                            event.stopPropagation(); // Prevent toggle action
+                            if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
+                                data.places[placeIndex].items.splice(itemIndex, 1);
+                                updateData(data).then(() => {
+                                    displayShoppingList(); // Refresh display after update
+                                });
+                            }
+                        };
+                        itemDiv.appendChild(itemDeleteButton);
+                    }
+
+                    placeGroup.appendChild(itemDiv);
+                });
+
+                const onceOffContainer = document.createElement('div');
+                onceOffContainer.style.display = 'flex';
+                onceOffContainer.style.alignItems = 'center';
+
+                const onceOffInput = document.createElement('input');
+                onceOffInput.classList.add('once-off-box');
+                onceOffInput.type = 'text';
+                onceOffInput.value = place.onceOff || '';
+                onceOffInput.placeholder = 'Enter once-off items...';
+                onceOffInput.style.marginRight = '10px';
+
+                if (onceOffInput.value) onceOffInput.classList.add('has-text');
+                onceOffInput.addEventListener('input', () => {
+                    if (onceOffInput.value) {
+                        onceOffInput.classList.add('has-text');
+                    } else {
+                        onceOffInput.classList.remove('has-text');
+                    }
+                });
+
+                onceOffInput.onchange = () => updateOnceOffValue(data, placeIndex, onceOffInput.value);
+                onceOffContainer.appendChild(onceOffInput);
+
+                if (editModeToggle.checked) {
+                    const addItemButton = document.createElement('span');
+                    addItemButton.textContent = '+';
+                    addItemButton.style.color = 'green';
+                    addItemButton.style.fontSize = '1.5em';
+                    addItemButton.style.cursor = 'pointer';
+                    addItemButton.onclick = () => {
+                        if (onceOffInput.value.trim()) {
+                            data.places[placeIndex].items.push({ name: onceOffInput.value.trim(), needed: true });
+                            onceOffInput.value = '';
+                            updateData(data).then(() => {
+                                displayShoppingList(); // Refresh display after update
+                            });
+                        }
+                    };
+                    onceOffContainer.appendChild(addItemButton);
+                }
+
+                placeGroup.appendChild(onceOffContainer);
+                shoppingList.appendChild(placeGroup);
+            });
+
+            if (editModeToggle.checked) {
+                const addPlaceContainer = document.createElement('div');
+                addPlaceContainer.style.display = 'flex';
+                addPlaceContainer.style.alignItems = 'center';
+
+                const addPlaceInput = document.createElement('input');
+                addPlaceInput.type = 'text';
+                addPlaceInput.placeholder = 'Enter new place name...';
+                addPlaceInput.classList.add('once-off-box');
+                addPlaceInput.style.marginRight = '10px';
+
+                const addPlaceButton = document.createElement('button');
+                addPlaceButton.textContent = 'Add Place';
+                addPlaceButton.onclick = () => {
+                    if (addPlaceInput.value.trim()) {
+                        data.places.push({ name: addPlaceInput.value.trim(), items: [] });
+                        addPlaceInput.value = '';
+                        updateData(data).then(() => {
+                            displayShoppingList(); // Refresh display after update
+                        });
+                    }
+                };
+
+                addPlaceContainer.appendChild(addPlaceInput);
+                addPlaceContainer.appendChild(addPlaceButton);
+                shoppingList.appendChild(addPlaceContainer);
+            }
+
+            const backupButton = document.getElementById('backupButton') || document.createElement('button');
+            if (!backupButton.id) {
+                backupButton.id = 'backupButton';
+                backupButton.textContent = 'Backup json below';
+                backupButton.style.display = 'none';
+                backupButton.addEventListener('click', () => {
+                    const jsonContent = document.getElementById('jsonDisplay').value;
+                    const blob = new Blob([jsonContent], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'shopping_list_backup.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+                shoppingList.appendChild(backupButton);
+            }
+
+            const jsonDisplay = document.getElementById('jsonDisplay') || document.createElement('textarea');
+            if (!jsonDisplay.id) {
+                jsonDisplay.id = 'jsonDisplay';
+                jsonDisplay.classList.add('json-display');
+                shoppingList.appendChild(jsonDisplay);
+            }
+
+            if (editModeToggle.checked) {
+                backupButton.style.display = 'inline-block';
+                jsonDisplay.style.display = 'block';
+                jsonDisplay.value = JSON.stringify(currentData, null, 2);
+            } else {
+                backupButton.style.display = 'none';
+                jsonDisplay.style.display = 'none';
+            }
+
+            editModeContainer.style.display = 'flex'; // Show the edit mode controls after data loads
+			editModeToggle.style.display = 'flex';
+        }
+
+        function updateOnceOffValue(data, placeIndex, value) {
+            data.places[placeIndex].onceOff = value;
+            updateData(data);
+        }
+
+        displayShoppingList();		
+    });
+
+</script>
+
+
+</body>
+
+
+</html>
